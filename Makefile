@@ -1,5 +1,5 @@
 APP_NAME := Crop
-BUILD_DIR := build
+BUILD_DIR := build.noindex
 APP_BUNDLE := $(BUILD_DIR)/$(APP_NAME).app
 SOURCES := $(wildcard Sources/Crop/*.swift)
 ARCH := $(shell uname -m)
