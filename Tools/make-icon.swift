@@ -3,12 +3,8 @@ import AppKit
 let side: CGFloat = 1024
 let space = CGColorSpace(name: CGColorSpace.sRGB)!
 
-func color(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat, _ a: CGFloat = 1) -> CGColor {
-    CGColor(srgbRed: r / 255, green: g / 255, blue: b / 255, alpha: a)
-}
-
-func gradient(_ colors: [CGColor], _ locations: [CGFloat]) -> CGGradient {
-    CGGradient(colorsSpace: space, colors: colors as CFArray, locations: locations)!
+func color(_ hex: UInt32, _ alpha: CGFloat = 1) -> CGColor {
+    CGColor(srgbRed: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255, blue: CGFloat(hex & 0xFF) / 255, alpha: alpha)
 }
 
 func makeContext() -> CGContext {
@@ -25,20 +21,26 @@ func makeContext() -> CGContext {
     return context
 }
 
-func bracketsPath(in rect: CGRect, arm: CGFloat, thickness: CGFloat, radius: CGFloat) -> CGPath {
+func roundedRect(_ rect: CGRect, _ radius: CGFloat) -> CGPath {
+    let r = min(radius, rect.width / 2, rect.height / 2)
+    return CGPath(roundedRect: rect, cornerWidth: r, cornerHeight: r, transform: nil)
+}
+
+func bracketsPath(in frame: CGRect, arm: CGFloat, thickness: CGFloat, radius: CGFloat) -> CGPath {
     let path = CGMutablePath()
     let corners: [(CGPoint, CGFloat, CGFloat)] = [
-        (CGPoint(x: rect.minX, y: rect.maxY), 1, -1),
-        (CGPoint(x: rect.maxX, y: rect.maxY), -1, -1),
-        (CGPoint(x: rect.minX, y: rect.minY), 1, 1),
-        (CGPoint(x: rect.maxX, y: rect.minY), -1, 1)
+        (CGPoint(x: frame.minX, y: frame.maxY), 1, -1),
+        (CGPoint(x: frame.maxX, y: frame.maxY), -1, -1),
+        (CGPoint(x: frame.minX, y: frame.minY), 1, 1),
+        (CGPoint(x: frame.maxX, y: frame.minY), -1, 1)
     ]
     for (corner, dx, dy) in corners {
-        let bracket = CGMutablePath()
-        bracket.move(to: CGPoint(x: corner.x + dx * arm, y: corner.y))
-        bracket.addArc(tangent1End: corner, tangent2End: CGPoint(x: corner.x, y: corner.y + dy * arm), radius: radius)
-        bracket.addLine(to: CGPoint(x: corner.x, y: corner.y + dy * arm))
-        path.addPath(bracket.copy(strokingWithWidth: thickness, lineCap: .round, lineJoin: .round, miterLimit: 10))
+        let horizontalX = dx > 0 ? corner.x : corner.x - arm
+        let horizontalY = dy > 0 ? corner.y : corner.y - thickness
+        let verticalX = dx > 0 ? corner.x : corner.x - thickness
+        let verticalY = dy > 0 ? corner.y : corner.y - arm
+        path.addPath(roundedRect(CGRect(x: horizontalX, y: horizontalY, width: arm, height: thickness), radius))
+        path.addPath(roundedRect(CGRect(x: verticalX, y: verticalY, width: thickness, height: arm), radius))
     }
     return path
 }
@@ -46,93 +48,17 @@ func bracketsPath(in rect: CGRect, arm: CGFloat, thickness: CGFloat, radius: CGF
 func render() -> CGImage {
     let context = makeContext()
 
-    context.drawLinearGradient(
-        gradient([color(40, 40, 44), color(4, 5, 9)], [0, 1]),
-        start: CGPoint(x: 0, y: side),
-        end: CGPoint(x: 0, y: 0),
-        options: []
-    )
+    context.setFillColor(color(0xE8261E))
+    context.fill(CGRect(x: 0, y: 0, width: side, height: side))
 
-    let frame = CGRect(x: 232, y: 232, width: 560, height: 560)
-    let brackets = bracketsPath(in: frame, arm: 196, thickness: 74, radius: 58)
-
-    context.saveGState()
-    context.setShadow(offset: CGSize(width: 0, height: -22), blur: 46, color: color(0, 0, 0, 0.75))
-    context.addPath(brackets)
-    context.setFillColor(color(200, 202, 210))
+    let frame = CGRect(x: 214, y: 214, width: 596, height: 596)
+    context.addPath(bracketsPath(in: frame, arm: 212, thickness: 114, radius: 57))
+    context.setFillColor(color(0xF5F5F7, 0.5))
     context.fillPath()
-    context.restoreGState()
 
-    context.saveGState()
-    context.addPath(brackets)
-    context.clip()
-    context.saveGState()
-    context.clip(to: CGRect(x: 0, y: 0, width: side / 2, height: side))
-    context.drawLinearGradient(
-        gradient([color(255, 255, 255), color(226, 228, 235)], [0, 1]),
-        start: CGPoint(x: 0, y: frame.maxY + 40),
-        end: CGPoint(x: 0, y: frame.minY - 40),
-        options: []
-    )
-    context.restoreGState()
-    context.saveGState()
-    context.clip(to: CGRect(x: side / 2, y: 0, width: side / 2, height: side))
-    context.drawLinearGradient(
-        gradient([color(214, 217, 226), color(170, 174, 186)], [0, 1]),
-        start: CGPoint(x: 0, y: frame.maxY + 40),
-        end: CGPoint(x: 0, y: frame.minY - 40),
-        options: []
-    )
-    context.restoreGState()
-    context.restoreGState()
-
-    context.saveGState()
-    context.addPath(brackets)
-    context.setStrokeColor(color(255, 255, 255, 0.55))
-    context.setLineWidth(3)
-    context.strokePath()
-    context.restoreGState()
-
-    let center = CGPoint(x: side / 2, y: side / 2)
-    let dotRadius: CGFloat = 112
-    let dot = CGRect(x: center.x - dotRadius, y: center.y - dotRadius, width: dotRadius * 2, height: dotRadius * 2)
-
-    context.saveGState()
-    context.setShadow(offset: .zero, blur: 120, color: color(255, 60, 40, 0.95))
-    context.setFillColor(color(255, 60, 40))
-    context.fillEllipse(in: dot)
-    context.restoreGState()
-
-    context.saveGState()
-    context.setShadow(offset: .zero, blur: 40, color: color(255, 120, 90, 0.9))
-    context.addEllipse(in: dot)
-    context.clip()
-    context.drawRadialGradient(
-        gradient([color(255, 170, 140), color(255, 72, 50), color(214, 28, 18)], [0, 0.55, 1]),
-        startCenter: CGPoint(x: center.x - 30, y: center.y + 34), startRadius: 0,
-        endCenter: center, endRadius: dotRadius,
-        options: [.drawsAfterEndLocation]
-    )
-    context.restoreGState()
-
-    context.saveGState()
-    let shine = CGRect(x: center.x - 62, y: center.y + 22, width: 124, height: 70)
-    context.addEllipse(in: shine)
-    context.clip()
-    context.drawLinearGradient(
-        gradient([color(255, 255, 255, 0.55), color(255, 255, 255, 0)], [0, 1]),
-        start: CGPoint(x: 0, y: shine.maxY),
-        end: CGPoint(x: 0, y: shine.minY),
-        options: []
-    )
-    context.restoreGState()
-
-    context.saveGState()
-    context.addEllipse(in: dot.insetBy(dx: -1, dy: -1))
-    context.setStrokeColor(color(255, 200, 180, 0.6))
-    context.setLineWidth(2)
-    context.strokePath()
-    context.restoreGState()
+    let dotRadius: CGFloat = 124
+    context.setFillColor(color(0xF5F5F7))
+    context.fillEllipse(in: CGRect(x: side / 2 - dotRadius, y: side / 2 - dotRadius, width: dotRadius * 2, height: dotRadius * 2))
 
     return context.makeImage()!
 }
