@@ -11,7 +11,7 @@
 "Save to" = "Salvar em";
 "Clipboard" = "Área de Transferência";
 "Screenshots only" = "Apenas capturas de tela";
-"Other Location…" = "Outro Local…";
+"Other Location" = "Outro Local";
 "Timer" = "Temporizador";
 "None" = "Nenhum";
 "%d Seconds" = "%d Segundos";
@@ -23,8 +23,8 @@
 "Open When Done" = "Abrir ao Concluir";
 "Frame Rate" = "Taxa de Quadros";
 "Choose" = "Escolher";
-"Record Screen…" = "Gravar Tela…";
-"Take Screenshot…" = "Capturar Tela…";
+"Record Screen" = "Gravar Tela";
+"Take Screenshot" = "Capturar Tela";
 "Open at Login" = "Abrir ao Iniciar Sessão";
 "About Crop" = "Sobre o Crop";
 "Quit Crop" = "Encerrar o Crop";
