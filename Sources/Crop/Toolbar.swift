@@ -53,7 +53,7 @@ enum ToolbarIcons {
     }
 }
 
-final class ToolbarModeButton: NSControl {
+final class ToolbarModeButton: PointerControl {
     let mode: CaptureMode
     var isSelected = false { didSet { needsDisplay = true } }
     private var isHovered = false { didSet { needsDisplay = true } }
@@ -87,7 +87,7 @@ final class ToolbarModeButton: NSControl {
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         trackingAreas.forEach(removeTrackingArea)
-        addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
+        addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .cursorUpdate, .activeAlways, .inVisibleRect], owner: self))
     }
 
     override func mouseEntered(with event: NSEvent) { isHovered = true }
@@ -122,18 +122,33 @@ final class ToolbarModeButton: NSControl {
     }
 }
 
-final class ToolbarActionButton: NSControl {
-    var title: String = "" { didSet { invalidateIntrinsicContentSize(); needsDisplay = true } }
-    var timerSeconds: Int = 0 { didSet { invalidateIntrinsicContentSize(); needsDisplay = true } }
-    private var isPressed = false { didSet { needsDisplay = true } }
+final class ToolbarActionButton: PointerControl {
+    var title: String = "" { didSet { refreshContent() } }
+    var timerSeconds: Int = 0 { didSet { refreshContent() } }
+    private var isPressed = false { didSet { refreshFill() } }
+    private var isHovered = false { didSet { refreshFill() } }
 
-    private let titleFont = NSFont.systemFont(ofSize: 13, weight: .medium)
+    private let titleFont = NSFont.systemFont(ofSize: 13, weight: .regular)
     private let timerFont = NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .regular)
+    private let baseColor = NSColor(srgbRed: 232 / 255, green: 38 / 255, blue: 30 / 255, alpha: 1)
+    private let labelView = ActionLabelView()
+    private var glass: NSView?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         setAccessibilityRole(.button)
         setContentHuggingPriority(.required, for: .horizontal)
+        if #available(macOS 26.0, *) {
+            let effect = NSGlassEffectView(frame: bounds)
+            effect.cornerRadius = 9
+            effect.autoresizingMask = [.width, .height]
+            addSubview(effect)
+            glass = effect
+        }
+        labelView.frame = bounds
+        labelView.autoresizingMask = [.width, .height]
+        addSubview(labelView)
+        refreshFill()
     }
 
     required init?(coder: NSCoder) {
@@ -142,10 +157,14 @@ final class ToolbarActionButton: NSControl {
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        frame.contains(point) ? self : nil
+    }
+
     private var content: NSAttributedString {
         let result = NSMutableAttributedString(string: title, attributes: [.font: titleFont, .foregroundColor: NSColor.white])
         if timerSeconds > 0 {
-            let secondary = NSColor.white.withAlphaComponent(0.85)
+            let secondary = NSColor.white.withAlphaComponent(0.6)
             result.append(NSAttributedString(string: "  ", attributes: [.font: timerFont]))
             if let symbol = NSImage(systemSymbolName: "timer", accessibilityDescription: nil)?
                 .withSymbolConfiguration(.init(pointSize: 11, weight: .regular).applying(.init(paletteColors: [secondary]))) {
@@ -159,10 +178,38 @@ final class ToolbarActionButton: NSControl {
         return result
     }
 
+    private var fillColor: NSColor {
+        if isPressed { return baseColor.blended(withFraction: 0.2, of: .black) ?? baseColor }
+        if isHovered { return baseColor.blended(withFraction: 0.1, of: .white) ?? baseColor }
+        return baseColor
+    }
+
+    private func refreshContent() {
+        labelView.content = content
+        invalidateIntrinsicContentSize()
+    }
+
+    private func refreshFill() {
+        if #available(macOS 26.0, *), let effect = glass as? NSGlassEffectView {
+            effect.tintColor = fillColor
+        } else {
+            needsDisplay = true
+        }
+    }
+
     override var intrinsicContentSize: NSSize {
         let size = content.size()
         return NSSize(width: ceil(size.width) + 32, height: 36)
     }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.filter { $0.options.contains(.mouseEnteredAndExited) }.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
+    }
+
+    override func mouseEntered(with event: NSEvent) { isHovered = true }
+    override func mouseExited(with event: NSEvent) { isHovered = false }
 
     override func mouseDown(with event: NSEvent) {
         isPressed = true
@@ -176,17 +223,26 @@ final class ToolbarActionButton: NSControl {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        let base = NSColor(srgbRed: 31 / 255, green: 174 / 255, blue: 1, alpha: 1)
-        let fill = isPressed ? (base.blended(withFraction: 0.2, of: .black) ?? base) : base
-        fill.setFill()
-        NSBezierPath(roundedRect: bounds, xRadius: 9, yRadius: 9).fill()
-        let text = content
-        let size = text.size()
-        text.draw(at: NSPoint(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2))
+        guard glass == nil else { return }
+        let fill = fillColor
+        let top = fill.blended(withFraction: 0.015, of: .white) ?? fill
+        let bottom = fill.blended(withFraction: 0.015, of: .black) ?? fill
+        NSGradient(starting: top, ending: bottom)?.draw(in: NSBezierPath(roundedRect: bounds, xRadius: 9, yRadius: 9), angle: isFlipped ? 90 : -90)
     }
 }
 
-final class ToolbarOptionsButton: NSControl {
+final class ActionLabelView: NSView {
+    var content = NSAttributedString() { didSet { needsDisplay = true } }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let size = content.size()
+        content.draw(at: NSPoint(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2))
+    }
+}
+
+final class ToolbarOptionsButton: PointerControl {
     private var isPressed = false { didSet { needsDisplay = true } }
     private let label = L("Options")
     private let labelFont = NSFont.systemFont(ofSize: 13, weight: .regular)
@@ -255,7 +311,7 @@ final class CaptureToolbarView: NSView {
     init(mode: CaptureMode, timerSeconds: Int) {
         super.init(frame: .zero)
 
-        let closeButton = NSButton()
+        let closeButton = PointerButton()
         closeButton.isBordered = false
         closeButton.image = NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: L("Close"))?
             .withSymbolConfiguration(.init(pointSize: 16, weight: .regular))
@@ -392,8 +448,11 @@ final class ToolbarWindow: CaptureKeyWindow {
         if #available(macOS 26.0, *) {
             let glass = NSGlassEffectView(frame: bounds)
             glass.cornerRadius = radius
-            glass.contentView = toolbar
-            container = glass
+            glass.autoresizingMask = [.width, .height]
+            let stack = NSView(frame: bounds)
+            stack.addSubview(glass)
+            stack.addSubview(toolbar)
+            container = stack
         } else {
             let effect = NSVisualEffectView(frame: bounds)
             effect.material = .hudWindow
@@ -430,7 +489,7 @@ final class ToolbarWindow: CaptureKeyWindow {
     }
 }
 
-final class ToolbarPlainButton: NSControl {
+final class ToolbarPlainButton: PointerControl {
     private let title: String
     private var isPressed = false { didSet { needsDisplay = true } }
     private let titleFont = NSFont.systemFont(ofSize: 13, weight: .regular)
@@ -533,5 +592,29 @@ final class CountdownPillView: NSView {
 
     @objc private func cancel() {
         onCancel?()
+    }
+}
+
+class PointerControl: NSControl {
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.filter { $0.options.contains(.cursorUpdate) }.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(rect: bounds, options: [.cursorUpdate, .activeAlways, .inVisibleRect], owner: self))
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        NSCursor.pointingHand.set()
+    }
+}
+
+final class PointerButton: NSButton {
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.filter { $0.owner === self && $0.options.contains(.cursorUpdate) }.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(rect: bounds, options: [.cursorUpdate, .activeAlways, .inVisibleRect], owner: self))
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        NSCursor.pointingHand.set()
     }
 }
