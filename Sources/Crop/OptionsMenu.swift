@@ -70,7 +70,7 @@ final class OptionsMenu: NSObject {
             clipboardItem.toolTip = L("Screenshots only")
         }
         items.append(clipboardItem)
-        items.append(menuItem(L("Other Location…"), #selector(chooseSaveLocation)))
+        items.append(menuItem(L("Other Location"), #selector(chooseSaveLocation)))
         return items
     }
 
