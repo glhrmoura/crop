@@ -38,6 +38,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         captureController.onCapture = { [weak self] request in
             self?.handle(request)
         }
+        warmUpMenu(menu)
+    }
+
+    private func warmUpMenu(_ menu: NSMenu) {
+        Task {
+            await Task.detached(priority: .userInitiated) {
+                _ = AVCaptureDevice.DiscoverySession(
+                    deviceTypes: [.microphone, .external],
+                    mediaType: .audio,
+                    position: .unspecified
+                ).devices
+            }.value
+            menuNeedsUpdate(menu)
+        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -59,8 +73,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
 
-        menu.addItem(actionItem(L("Record Screen…"), symbol: "record.circle", #selector(recordScreen)))
-        menu.addItem(actionItem(L("Take Screenshot…"), symbol: "camera.viewfinder", #selector(takeScreenshotFromMenu)))
+        menu.addItem(actionItem(L("Record Screen"), symbol: "record.circle", #selector(recordScreen)))
+        menu.addItem(actionItem(L("Take Screenshot"), symbol: "camera.viewfinder", #selector(takeScreenshotFromMenu)))
 
         menu.addItem(.separator())
         menu.addItem(optionsMenu.submenuItem(L("Save to"), symbol: "folder", items: optionsMenu.saveItems(isRecording: false)))
