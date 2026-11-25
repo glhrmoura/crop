@@ -69,6 +69,19 @@ final class Recorder: NSObject, SCStreamDelegate, SCRecordingOutputDelegate {
             try await stream.stopCapture()
         } catch {
             finish(.failure(error))
+            return
+        }
+        finishIfStalled(stream)
+    }
+
+    private func finishIfStalled(_ stream: SCStream) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+            guard let self, self.stream === stream, let url = self.outputURL else { return }
+            if FileManager.default.fileExists(atPath: url.path) {
+                self.finish(.success(url))
+            } else {
+                self.finish(.failure(CocoaError(.fileWriteUnknown)))
+            }
         }
     }
 
@@ -97,8 +110,9 @@ final class Recorder: NSObject, SCStreamDelegate, SCRecordingOutputDelegate {
 
     private func finish(_ result: Result<URL, Error>) {
         DispatchQueue.main.async { [weak self] in
-            guard let self, self.stream != nil else { return }
+            guard let self, let stream = self.stream else { return }
             self.reset()
+            Task { try? await stream.stopCapture() }
             self.onFinish?(result)
         }
     }
