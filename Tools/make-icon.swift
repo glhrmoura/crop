@@ -48,7 +48,7 @@ func bracketsPath(in frame: CGRect, arm: CGFloat, thickness: CGFloat, radius: CG
 func render() -> CGImage {
     let context = makeContext()
 
-    context.setFillColor(color(0xE8261E))
+    context.setFillColor(color(0x2CB4EC))
     context.fill(CGRect(x: 0, y: 0, width: side, height: side))
 
     let frame = CGRect(x: 214, y: 214, width: 596, height: 596)

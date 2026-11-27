@@ -85,12 +85,18 @@ final class OverlayView: NSView {
         return NSPoint(x: local.x + screenFrame.minX, y: local.y + screenFrame.minY)
     }
 
-    override func cursorUpdate(with event: NSEvent) {
+    private func updateCursor(_ event: NSEvent) {
+        let topWindow = NSWindow.windowNumber(at: NSEvent.mouseLocation, belowWindowWithWindowNumber: 0)
+        guard topWindow == window?.windowNumber else { return }
         controller?.cursor(at: globalPoint(event)).set()
     }
 
+    override func cursorUpdate(with event: NSEvent) {
+        updateCursor(event)
+    }
+
     override func mouseMoved(with event: NSEvent) {
-        controller?.cursor(at: globalPoint(event)).set()
+        updateCursor(event)
     }
 
     override func mouseDown(with event: NSEvent) {
