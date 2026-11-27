@@ -45,7 +45,8 @@ final class CaptureController: NSObject {
     func show() {
         if let toolbarWindow {
             NSApp.activate(ignoringOtherApps: true)
-            toolbarWindow.makeKeyAndOrderFront(nil)
+            toolbarWindow.orderFrontRegardless()
+            focusOverlay()
             return
         }
 
@@ -81,20 +82,28 @@ final class CaptureController: NSObject {
         toolbar.onAction = { [weak self] in self?.performAction() }
 
         let window = ToolbarWindow(toolbar: toolbar)
+        window.acceptsKey = false
         window.onCancel = { [weak self] in self?.dismiss() }
         window.onConfirm = { [weak self] in self?.performAction() }
         let size = window.frame.size
         let bottomInset = max(anchorScreen.visibleFrame.minY - anchorScreen.frame.minY, 0)
         window.setFrameOrigin(NSPoint(
             x: anchorScreen.frame.midX - size.width / 2,
-            y: anchorScreen.frame.minY + bottomInset + 40
+            y: anchorScreen.frame.minY + bottomInset + 40 - ToolbarWindow.margin
         ))
         toolbarWindow = window
         toolbarView = toolbar
 
         NSApp.activate(ignoringOtherApps: true)
-        window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
+        focusOverlay()
         redraw()
+    }
+
+    private func focusOverlay() {
+        let screen = toolbarWindow?.screen
+        let overlay = overlayWindows.first { $0.screen == screen } ?? overlayWindows.first
+        overlay?.makeKey()
     }
 
     func dismiss() {
@@ -338,7 +347,8 @@ final class CaptureController: NSObject {
             guard let self, let toolbarWindow = self.toolbarWindow else { return }
             self.overlayWindows.forEach { $0.orderFrontRegardless() }
             NSApp.activate(ignoringOtherApps: true)
-            toolbarWindow.makeKeyAndOrderFront(nil)
+            toolbarWindow.orderFrontRegardless()
+            self.focusOverlay()
         }
     }
 }

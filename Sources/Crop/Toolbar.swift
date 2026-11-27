@@ -1,13 +1,15 @@
 import AppKit
 
 enum ToolbarIcons {
+    static let canvas = NSSize(width: 38, height: 30)
+
     static func image(for mode: CaptureMode) -> NSImage {
-        let size = NSSize(width: 30, height: 24)
-        let image = NSImage(size: size, flipped: false) { _ in
-            let frame = NSRect(x: 2, y: 4.5, width: 24, height: 16.5)
-            drawShape(mode.target, in: frame)
-            if mode.isRecording {
-                drawRecordBadge(center: NSPoint(x: frame.maxX, y: frame.minY + 0.5))
+        let image = NSImage(size: canvas, flipped: true) { _ in
+            if mode.isRecording, let badged = symbol(badgedName(for: mode.target)) {
+                badged.draw(in: NSRect(origin: .zero, size: badged.size))
+            } else if let base = symbol(baseName(for: mode.target)) {
+                base.draw(in: NSRect(origin: .zero, size: base.size))
+                if mode.isRecording { drawRecordBadge() }
             }
             return true
         }
@@ -16,41 +18,53 @@ enum ToolbarIcons {
         return image
     }
 
-    private static func drawShape(_ target: CaptureMode.Target, in frame: NSRect) {
-        NSColor.black.set()
-        let outline = NSBezierPath(roundedRect: frame.insetBy(dx: 0.65, dy: 0.65), xRadius: 3, yRadius: 3)
-        outline.lineWidth = 1.3
-
+    private static func baseName(for target: CaptureMode.Target) -> String {
         switch target {
-        case .screen:
-            outline.stroke()
-            let bar = NSRect(x: frame.minX + 2.6, y: frame.minY + 2.6, width: frame.width - 5.2, height: 3.6)
-            NSBezierPath(roundedRect: bar, xRadius: 0.8, yRadius: 0.8).fill()
-        case .window:
-            outline.stroke()
-            for index in 0..<3 {
-                let center = NSPoint(x: frame.minX + 3.8 + CGFloat(index) * 2.6, y: frame.maxY - 3.4)
-                NSBezierPath(ovalIn: NSRect(x: center.x - 0.8, y: center.y - 0.8, width: 1.6, height: 1.6)).fill()
-            }
-        case .selection:
-            outline.setLineDash([2.6, 2], count: 2, phase: 0)
-            outline.stroke()
+        case .screen: return "menubar.dock.rectangle"
+        case .window: return "macwindow"
+        case .selection: return "rectangle.dashed"
         }
     }
 
-    private static func drawRecordBadge(center: NSPoint) {
+    private static func badgedName(for target: CaptureMode.Target) -> String {
+        "\(baseName(for: target)).badge.record"
+    }
+
+    private static func symbol(_ name: String) -> NSImage? {
+        NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: 24, weight: .regular))
+    }
+
+    private static func drawRecordBadge() {
         guard let context = NSGraphicsContext.current else { return }
+        let center = NSPoint(x: 30, y: 22.25)
         context.saveGraphicsState()
         context.compositingOperation = .clear
-        NSBezierPath(ovalIn: NSRect(x: center.x - 5.6, y: center.y - 5.6, width: 11.2, height: 11.2)).fill()
+        NSBezierPath(ovalIn: NSRect(x: center.x - 7.25, y: center.y - 7.25, width: 14.5, height: 14.5)).fill()
         context.restoreGraphicsState()
 
         NSColor.black.set()
-        let ring = NSBezierPath(ovalIn: NSRect(x: center.x - 4.1, y: center.y - 4.1, width: 8.2, height: 8.2))
-        ring.lineWidth = 1.2
+        let ring = NSBezierPath(ovalIn: NSRect(x: center.x - 4.875, y: center.y - 4.875, width: 9.75, height: 9.75))
+        ring.lineWidth = 1.75
         ring.stroke()
-        NSBezierPath(ovalIn: NSRect(x: center.x - 2.3, y: center.y - 2.3, width: 4.6, height: 4.6)).fill()
+        NSBezierPath(ovalIn: NSRect(x: center.x - 3.25, y: center.y - 3.25, width: 6.5, height: 6.5)).fill()
     }
+}
+
+enum ToolbarMetrics {
+    static let barHeight: CGFloat = 50
+    static let barRadius: CGFloat = 15
+    static let inset: CGFloat = 7
+    static let controlHeight: CGFloat = 36
+    static let modeWidth: CGFloat = 44
+    static let modeRadius: CGFloat = 8
+    static let actionRadius: CGFloat = 10
+    static let iconAlpha: CGFloat = 0.38
+    static let selectedIconAlpha: CGFloat = 0.41
+    static let selectedFillAlpha: CGFloat = 0.1
+    static let hoverFillAlpha: CGFloat = 0.06
+    static let separatorAlpha: CGFloat = 0.1
+    static let font = NSFont.systemFont(ofSize: 13, weight: .regular)
 }
 
 final class ToolbarModeButton: PointerControl {
@@ -63,14 +77,14 @@ final class ToolbarModeButton: PointerControl {
     init(mode: CaptureMode) {
         self.mode = mode
         self.icon = ToolbarIcons.image(for: mode)
-        super.init(frame: NSRect(x: 0, y: 0, width: Self.width(for: mode), height: 34))
+        super.init(frame: NSRect(x: 0, y: 0, width: ToolbarMetrics.modeWidth, height: ToolbarMetrics.controlHeight))
         toolTip = mode.title
         setAccessibilityRole(.radioButton)
         setAccessibilityLabel(mode.title)
         translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            widthAnchor.constraint(equalToConstant: Self.width(for: mode)),
-            heightAnchor.constraint(equalToConstant: 34)
+            widthAnchor.constraint(equalToConstant: ToolbarMetrics.modeWidth),
+            heightAnchor.constraint(equalToConstant: ToolbarMetrics.controlHeight)
         ])
     }
 
@@ -78,9 +92,7 @@ final class ToolbarModeButton: PointerControl {
         nil
     }
 
-    static func width(for mode: CaptureMode) -> CGFloat { mode.isRecording ? 46 : 42 }
-
-    override var intrinsicContentSize: NSSize { NSSize(width: Self.width(for: mode), height: 34) }
+    override var intrinsicContentSize: NSSize { NSSize(width: ToolbarMetrics.modeWidth, height: ToolbarMetrics.controlHeight) }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
@@ -105,20 +117,21 @@ final class ToolbarModeButton: PointerControl {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        let alpha: CGFloat = isSelected ? 0.14 : (isPressed ? 0.12 : (isHovered ? 0.06 : 0))
+        let alpha: CGFloat = isSelected ? ToolbarMetrics.selectedFillAlpha : (isPressed ? ToolbarMetrics.selectedFillAlpha : (isHovered ? ToolbarMetrics.hoverFillAlpha : 0))
         if alpha > 0 {
             NSColor.labelColor.withAlphaComponent(alpha).setFill()
-            NSBezierPath(roundedRect: bounds, xRadius: 8, yRadius: 8).fill()
+            NSBezierPath(roundedRect: bounds, xRadius: ToolbarMetrics.modeRadius, yRadius: ToolbarMetrics.modeRadius).fill()
         }
-        let tint = NSColor.labelColor.withAlphaComponent(isSelected ? 0.9 : 0.72)
-        let tinted = NSImage(size: icon.size, flipped: false) { rect in
-            self.icon.draw(in: rect)
-            tint.set()
-            rect.fill(using: .sourceAtop)
-            return true
-        }
-        let origin = NSPoint(x: (bounds.width - icon.size.width) / 2, y: (bounds.height - icon.size.height) / 2)
-        tinted.draw(at: origin, from: .zero, operation: .sourceOver, fraction: 1)
+        guard let context = NSGraphicsContext.current?.cgContext else { return }
+        let rect = NSRect(x: 5, y: bounds.height - 5 - icon.size.height, width: icon.size.width, height: icon.size.height)
+        context.saveGState()
+        context.setAlpha(isSelected ? ToolbarMetrics.selectedIconAlpha : ToolbarMetrics.iconAlpha)
+        context.beginTransparencyLayer(auxiliaryInfo: nil)
+        icon.draw(in: rect)
+        NSColor.labelColor.withAlphaComponent(1).set()
+        rect.fill(using: .sourceAtop)
+        context.endTransparencyLayer()
+        context.restoreGState()
     }
 }
 
@@ -128,23 +141,16 @@ final class ToolbarActionButton: PointerControl {
     private var isPressed = false { didSet { refreshFill() } }
     private var isHovered = false { didSet { refreshFill() } }
 
-    private let titleFont = NSFont.systemFont(ofSize: 13, weight: .regular)
+    private let titleFont = ToolbarMetrics.font
     private let timerFont = NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .regular)
-    private let baseColor = NSColor(srgbRed: 232 / 255, green: 38 / 255, blue: 30 / 255, alpha: 1)
+    private let topColor = NSColor(displayP3Red: 57 / 255, green: 200 / 255, blue: 1, alpha: 1)
+    private let bottomColor = NSColor(displayP3Red: 46 / 255, green: 189 / 255, blue: 1, alpha: 1)
     private let labelView = ActionLabelView()
-    private var glass: NSView?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         setAccessibilityRole(.button)
         setContentHuggingPriority(.required, for: .horizontal)
-        if #available(macOS 26.0, *) {
-            let effect = NSGlassEffectView(frame: bounds)
-            effect.cornerRadius = 9
-            effect.autoresizingMask = [.width, .height]
-            addSubview(effect)
-            glass = effect
-        }
         labelView.frame = bounds
         labelView.autoresizingMask = [.width, .height]
         addSubview(labelView)
@@ -164,24 +170,29 @@ final class ToolbarActionButton: PointerControl {
     private var content: NSAttributedString {
         let result = NSMutableAttributedString(string: title, attributes: [.font: titleFont, .foregroundColor: NSColor.white])
         if timerSeconds > 0 {
-            let secondary = NSColor.white.withAlphaComponent(0.6)
-            result.append(NSAttributedString(string: "  ", attributes: [.font: timerFont]))
+            let secondary = NSColor.white.withAlphaComponent(0.5)
             if let symbol = NSImage(systemSymbolName: "timer", accessibilityDescription: nil)?
-                .withSymbolConfiguration(.init(pointSize: 11, weight: .regular).applying(.init(paletteColors: [secondary]))) {
+                .withSymbolConfiguration(.init(pointSize: 13, weight: .regular).applying(.init(paletteColors: [.white]))) {
+                let slot = NSSize(width: 23.8, height: symbol.size.height)
+                let image = NSImage(size: slot, flipped: false) { rect in
+                    symbol.draw(in: NSRect(x: (rect.width - symbol.size.width) / 2 + 0.5, y: 0, width: symbol.size.width, height: symbol.size.height),
+                                from: .zero, operation: .sourceOver, fraction: secondary.alphaComponent)
+                    return true
+                }
                 let attachment = NSTextAttachment()
-                attachment.image = symbol
-                attachment.bounds = NSRect(x: 0, y: -1.5, width: symbol.size.width, height: symbol.size.height)
+                attachment.image = image
+                attachment.bounds = NSRect(x: 0, y: (titleFont.capHeight - slot.height) / 2 + 0.5, width: slot.width, height: slot.height)
                 result.append(NSAttributedString(attachment: attachment))
             }
-            result.append(NSAttributedString(string: " \(timerSeconds)s", attributes: [.font: timerFont, .foregroundColor: secondary]))
+            result.append(NSAttributedString(string: "\(timerSeconds)s", attributes: [.font: timerFont, .foregroundColor: secondary]))
         }
         return result
     }
 
-    private var fillColor: NSColor {
-        if isPressed { return baseColor.blended(withFraction: 0.2, of: .black) ?? baseColor }
-        if isHovered { return baseColor.blended(withFraction: 0.1, of: .white) ?? baseColor }
-        return baseColor
+    private func adjusted(_ color: NSColor) -> NSColor {
+        if isPressed { return color.blended(withFraction: 0.2, of: .black) ?? color }
+        if isHovered { return color.blended(withFraction: 0.1, of: .white) ?? color }
+        return color
     }
 
     private func refreshContent() {
@@ -190,16 +201,12 @@ final class ToolbarActionButton: PointerControl {
     }
 
     private func refreshFill() {
-        if #available(macOS 26.0, *), let effect = glass as? NSGlassEffectView {
-            effect.tintColor = fillColor
-        } else {
-            needsDisplay = true
-        }
+        needsDisplay = true
     }
 
     override var intrinsicContentSize: NSSize {
         let size = content.size()
-        return NSSize(width: ceil(size.width) + 32, height: 36)
+        return NSSize(width: size.width + 30, height: ToolbarMetrics.controlHeight)
     }
 
     override func updateTrackingAreas() {
@@ -223,11 +230,8 @@ final class ToolbarActionButton: PointerControl {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        guard glass == nil else { return }
-        let fill = fillColor
-        let top = fill.blended(withFraction: 0.015, of: .white) ?? fill
-        let bottom = fill.blended(withFraction: 0.015, of: .black) ?? fill
-        NSGradient(starting: top, ending: bottom)?.draw(in: NSBezierPath(roundedRect: bounds, xRadius: 9, yRadius: 9), angle: isFlipped ? 90 : -90)
+        let path = NSBezierPath(roundedRect: bounds, xRadius: ToolbarMetrics.actionRadius, yRadius: ToolbarMetrics.actionRadius)
+        NSGradient(starting: adjusted(topColor), ending: adjusted(bottomColor))?.draw(in: path, angle: isFlipped ? 90 : -90)
     }
 }
 
@@ -245,7 +249,9 @@ final class ActionLabelView: NSView {
 final class ToolbarOptionsButton: PointerControl {
     private var isPressed = false { didSet { needsDisplay = true } }
     private let label = L("Options")
-    private let labelFont = NSFont.systemFont(ofSize: 13, weight: .regular)
+    private let labelFont = ToolbarMetrics.font
+    private static let padding: CGFloat = 8
+    private static let chevronGap: CGFloat = 4.8
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -259,9 +265,15 @@ final class ToolbarOptionsButton: PointerControl {
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
+    private func chevron(_ color: NSColor) -> NSImage? {
+        NSImage(systemSymbolName: "chevron.down", accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: 8, weight: .semibold).applying(.init(paletteColors: [color])))
+    }
+
     override var intrinsicContentSize: NSSize {
         let size = (label as NSString).size(withAttributes: [.font: labelFont])
-        return NSSize(width: ceil(size.width) + 30, height: 34)
+        let chevronWidth = chevron(.labelColor)?.size.width ?? 0
+        return NSSize(width: Self.padding * 2 + size.width + Self.chevronGap + chevronWidth, height: ToolbarMetrics.controlHeight)
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -272,27 +284,26 @@ final class ToolbarOptionsButton: PointerControl {
 
     override func draw(_ dirtyRect: NSRect) {
         if isPressed {
-            NSColor.labelColor.withAlphaComponent(0.1).setFill()
-            NSBezierPath(roundedRect: bounds, xRadius: 8, yRadius: 8).fill()
+            NSColor.labelColor.withAlphaComponent(ToolbarMetrics.selectedFillAlpha).setFill()
+            NSBezierPath(roundedRect: bounds, xRadius: ToolbarMetrics.modeRadius, yRadius: ToolbarMetrics.modeRadius).fill()
         }
-        let color = NSColor.labelColor.withAlphaComponent(0.72)
+        let color = NSColor.labelColor.withAlphaComponent(ToolbarMetrics.iconAlpha)
         let attributes: [NSAttributedString.Key: Any] = [.font: labelFont, .foregroundColor: color]
         let size = (label as NSString).size(withAttributes: attributes)
-        let originX: CGFloat = 8
+        let originX = Self.padding
         (label as NSString).draw(at: NSPoint(x: originX, y: (bounds.height - size.height) / 2), withAttributes: attributes)
 
-        guard let chevron = NSImage(systemSymbolName: "chevron.down", accessibilityDescription: nil)?
-            .withSymbolConfiguration(.init(pointSize: 9, weight: .semibold).applying(.init(paletteColors: [color]))) else { return }
-        chevron.draw(at: NSPoint(x: originX + size.width + 5, y: (bounds.height - chevron.size.height) / 2 - 0.5),
-                     from: .zero, operation: .sourceOver, fraction: 1)
+        guard let chevron = chevron(NSColor.labelColor.withAlphaComponent(1)) else { return }
+        chevron.draw(at: NSPoint(x: originX + size.width + Self.chevronGap, y: (bounds.height - chevron.size.height) / 2),
+                     from: .zero, operation: .sourceOver, fraction: ToolbarMetrics.iconAlpha)
     }
 }
 
 final class ToolbarSeparator: NSView {
-    override var intrinsicContentSize: NSSize { NSSize(width: 1, height: 22) }
+    override var intrinsicContentSize: NSSize { NSSize(width: 1, height: 23) }
 
     override func draw(_ dirtyRect: NSRect) {
-        NSColor.labelColor.withAlphaComponent(0.14).setFill()
+        NSColor.labelColor.withAlphaComponent(ToolbarMetrics.separatorAlpha).setFill()
         bounds.fill()
     }
 }
@@ -315,12 +326,13 @@ final class CaptureToolbarView: NSView {
         closeButton.isBordered = false
         closeButton.image = NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: L("Close"))?
             .withSymbolConfiguration(.init(pointSize: 16, weight: .regular))
-        closeButton.contentTintColor = NSColor.labelColor.withAlphaComponent(0.55)
+        closeButton.imagePosition = .imageOnly
+        closeButton.contentTintColor = NSColor.labelColor.withAlphaComponent(ToolbarMetrics.iconAlpha)
         closeButton.toolTip = L("Close")
         closeButton.target = self
         closeButton.action = #selector(close)
         closeButton.translatesAutoresizingMaskIntoConstraints = false
-        closeButton.widthAnchor.constraint(equalToConstant: 26).isActive = true
+        closeButton.widthAnchor.constraint(equalToConstant: 19).isActive = true
 
         modeButtons = CaptureMode.allCases.map { mode in
             let button = ToolbarModeButton(mode: mode)
@@ -334,24 +346,30 @@ final class CaptureToolbarView: NSView {
         actionButton.target = self
         actionButton.action = #selector(performAction)
 
-        let screenshotGroup = group(Array(modeButtons[0..<3]))
-        let recordingGroup = group(Array(modeButtons[3..<6]))
+        let screenshotGroup = group(Array(modeButtons[0..<3]), spacing: 4)
+        let recordingGroup = group(Array(modeButtons[3..<6]), spacing: 13)
+        let firstSeparator = ToolbarSeparator()
+        let secondSeparator = ToolbarSeparator()
 
         let stack = NSStackView(views: [
             closeButton,
             screenshotGroup,
-            ToolbarSeparator(),
+            firstSeparator,
             recordingGroup,
-            ToolbarSeparator(),
+            secondSeparator,
             optionsButton,
             actionButton
         ])
         stack.orientation = .horizontal
         stack.alignment = .centerY
-        stack.spacing = 8
-        stack.setCustomSpacing(8, after: closeButton)
-        stack.setCustomSpacing(6, after: optionsButton)
-        stack.edgeInsets = NSEdgeInsets(top: 5, left: 10, bottom: 5, right: 5)
+        stack.spacing = 0
+        stack.setCustomSpacing(10, after: closeButton)
+        stack.setCustomSpacing(8, after: screenshotGroup)
+        stack.setCustomSpacing(13, after: firstSeparator)
+        stack.setCustomSpacing(13, after: recordingGroup)
+        stack.setCustomSpacing(6, after: secondSeparator)
+        stack.setCustomSpacing(4.5, after: optionsButton)
+        stack.edgeInsets = NSEdgeInsets(top: ToolbarMetrics.inset, left: 13, bottom: ToolbarMetrics.inset, right: ToolbarMetrics.inset)
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
 
@@ -378,10 +396,10 @@ final class CaptureToolbarView: NSView {
         actionButton.setAccessibilityLabel(mode.actionTitle)
     }
 
-    private func group(_ buttons: [NSView]) -> NSStackView {
+    private func group(_ buttons: [NSView], spacing: CGFloat) -> NSStackView {
         let stack = NSStackView(views: buttons)
         stack.orientation = .horizontal
-        stack.spacing = 4
+        stack.spacing = spacing
         return stack
     }
 
@@ -425,13 +443,18 @@ class CaptureKeyWindow: NSWindow {
 @MainActor
 final class ToolbarWindow: CaptureKeyWindow {
     private let toolbarView: NSView
+    var acceptsKey = true
+
+    override var canBecomeKey: Bool { acceptsKey }
+    override var canBecomeMain: Bool { acceptsKey }
 
     init(toolbar: NSView) {
         self.toolbarView = toolbar
         super.init(contentRect: .zero, styleMask: .borderless, backing: .buffered, defer: false)
         isOpaque = false
         backgroundColor = .clear
-        hasShadow = true
+        hasShadow = false
+        ignoresMouseEvents = false
         level = .statusBar
         isReleasedWhenClosed = false
         isMovableByWindowBackground = true
@@ -443,8 +466,8 @@ final class ToolbarWindow: CaptureKeyWindow {
         toolbar.autoresizingMask = [.width, .height]
         toolbar.frame = bounds
 
-        let radius: CGFloat = 14
-        let container: NSView
+        let radius = ToolbarMetrics.barRadius
+        let bar: NSView
         if #available(macOS 26.0, *) {
             let glass = NSGlassEffectView(frame: bounds)
             glass.cornerRadius = radius
@@ -452,7 +475,7 @@ final class ToolbarWindow: CaptureKeyWindow {
             let stack = NSView(frame: bounds)
             stack.addSubview(glass)
             stack.addSubview(toolbar)
-            container = stack
+            bar = stack
         } else {
             let effect = NSVisualEffectView(frame: bounds)
             effect.material = .hudWindow
@@ -460,20 +483,30 @@ final class ToolbarWindow: CaptureKeyWindow {
             effect.state = .active
             effect.maskImage = Self.roundedMask(radius: radius)
             effect.addSubview(toolbar)
-            container = effect
+            bar = effect
         }
-        container.autoresizingMask = [.width, .height]
+        bar.frame = bounds.offsetBy(dx: Self.margin, dy: Self.margin)
+        bar.autoresizingMask = [.width, .height]
+
+        let container = NSView(frame: bounds.insetBy(dx: -Self.margin, dy: -Self.margin))
+        container.wantsLayer = true
+        let shadow = ToolbarShadowView(frame: bar.frame, radius: radius)
+        shadow.autoresizingMask = [.width, .height]
+        container.addSubview(shadow)
+        container.addSubview(bar)
+        setContentSize(container.frame.size)
         contentView = container
-        setContentSize(size)
     }
+
+    static let margin: CGFloat = 24
 
     func fitToContent() {
         toolbarView.layoutSubtreeIfNeeded()
         let size = toolbarView.fittingSize
+        let outer = NSSize(width: size.width + Self.margin * 2, height: size.height + Self.margin * 2)
         let anchor = NSPoint(x: frame.midX, y: frame.minY)
-        setFrame(NSRect(x: (anchor.x - size.width / 2).rounded(), y: anchor.y, width: size.width, height: size.height), display: true)
+        setFrame(NSRect(x: (anchor.x - outer.width / 2).rounded(), y: anchor.y, width: outer.width, height: outer.height), display: true)
         toolbarView.frame = NSRect(origin: .zero, size: size)
-        invalidateShadow()
     }
 
     private static func roundedMask(radius: CGFloat) -> NSImage {
@@ -486,6 +519,53 @@ final class ToolbarWindow: CaptureKeyWindow {
         image.capInsets = NSEdgeInsets(top: radius, left: radius, bottom: radius, right: radius)
         image.resizingMode = .stretch
         return image
+    }
+}
+
+final class ToolbarShadowView: NSView {
+    private let radius: CGFloat
+    private let shadowLayer = CALayer()
+    private let maskLayer = CAShapeLayer()
+    private let hairline = CAShapeLayer()
+
+    init(frame frameRect: NSRect, radius: CGFloat) {
+        self.radius = radius
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.masksToBounds = false
+        shadowLayer.shadowColor = NSColor.black.cgColor
+        shadowLayer.shadowOpacity = 0.18
+        shadowLayer.shadowRadius = 9
+        shadowLayer.shadowOffset = CGSize(width: 0, height: -3)
+        maskLayer.fillRule = .evenOdd
+        shadowLayer.mask = maskLayer
+        hairline.fillColor = nil
+        hairline.strokeColor = NSColor.black.withAlphaComponent(0.4).cgColor
+        hairline.lineWidth = 0.5
+        layer?.addSublayer(shadowLayer)
+        layer?.addSublayer(hairline)
+    }
+
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func layout() {
+        super.layout()
+        let shape = CGPath(roundedRect: bounds, cornerWidth: radius, cornerHeight: radius, transform: nil)
+        let reach = ToolbarWindow.margin
+        shadowLayer.frame = bounds
+        shadowLayer.shadowPath = shape
+        let mask = CGMutablePath()
+        mask.addRect(bounds.insetBy(dx: -reach, dy: -reach))
+        mask.addPath(shape)
+        maskLayer.frame = bounds
+        maskLayer.path = mask
+        let edge = bounds.insetBy(dx: -0.25, dy: -0.25)
+        hairline.frame = bounds
+        hairline.path = CGPath(roundedRect: edge, cornerWidth: radius + 0.25, cornerHeight: radius + 0.25, transform: nil)
     }
 }
 
