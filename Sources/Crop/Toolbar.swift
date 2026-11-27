@@ -70,7 +70,6 @@ enum ToolbarMetrics {
 final class ToolbarModeButton: PointerControl {
     let mode: CaptureMode
     var isSelected = false { didSet { needsDisplay = true } }
-    private var isHovered = false { didSet { needsDisplay = true } }
     private var isPressed = false { didSet { needsDisplay = true } }
     private let icon: NSImage
 
@@ -95,15 +94,6 @@ final class ToolbarModeButton: PointerControl {
     override var intrinsicContentSize: NSSize { NSSize(width: ToolbarMetrics.modeWidth, height: ToolbarMetrics.controlHeight) }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        trackingAreas.forEach(removeTrackingArea)
-        addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .cursorUpdate, .activeAlways, .inVisibleRect], owner: self))
-    }
-
-    override func mouseEntered(with event: NSEvent) { isHovered = true }
-    override func mouseExited(with event: NSEvent) { isHovered = false }
 
     override func mouseDown(with event: NSEvent) {
         isPressed = true
@@ -139,7 +129,6 @@ final class ToolbarActionButton: PointerControl {
     var title: String = "" { didSet { refreshContent() } }
     var timerSeconds: Int = 0 { didSet { refreshContent() } }
     private var isPressed = false { didSet { refreshFill() } }
-    private var isHovered = false { didSet { refreshFill() } }
 
     private let titleFont = ToolbarMetrics.font
     private let timerFont = NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .regular)
@@ -208,15 +197,6 @@ final class ToolbarActionButton: PointerControl {
         let size = content.size()
         return NSSize(width: size.width + 30, height: ToolbarMetrics.controlHeight)
     }
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        trackingAreas.filter { $0.options.contains(.mouseEnteredAndExited) }.forEach(removeTrackingArea)
-        addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
-    }
-
-    override func mouseEntered(with event: NSEvent) { isHovered = true }
-    override func mouseExited(with event: NSEvent) { isHovered = false }
 
     override func mouseDown(with event: NSEvent) {
         isPressed = true
@@ -386,6 +366,15 @@ final class CaptureToolbarView: NSView {
     required init?(coder: NSCoder) {
         nil
     }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.filter { $0.owner === self }.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .cursorUpdate, .activeAlways, .inVisibleRect], owner: self))
+    }
+
+    override func cursorUpdate(with event: NSEvent) { NSCursor.arrow.set() }
+    override func mouseEntered(with event: NSEvent) { NSCursor.arrow.set() }
 
     func update(mode: CaptureMode, timerSeconds: Int) {
         for button in modeButtons {
@@ -675,15 +664,30 @@ final class CountdownPillView: NSView {
     }
 }
 
+private let pointerTrackingOptions: NSTrackingArea.Options = [.mouseEnteredAndExited, .mouseMoved, .cursorUpdate, .activeAlways, .inVisibleRect]
+
 class PointerControl: NSControl {
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        trackingAreas.filter { $0.options.contains(.cursorUpdate) }.forEach(removeTrackingArea)
-        addTrackingArea(NSTrackingArea(rect: bounds, options: [.cursorUpdate, .activeAlways, .inVisibleRect], owner: self))
+    var isHovered = false {
+        didSet { if oldValue != isHovered { needsDisplay = true } }
     }
 
-    override func cursorUpdate(with event: NSEvent) {
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.filter { $0.owner === self }.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(rect: bounds, options: pointerTrackingOptions, owner: self))
+    }
+
+    override func cursorUpdate(with event: NSEvent) { NSCursor.pointingHand.set() }
+    override func mouseMoved(with event: NSEvent) { NSCursor.pointingHand.set() }
+
+    override func mouseEntered(with event: NSEvent) {
+        isHovered = true
         NSCursor.pointingHand.set()
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        isHovered = false
+        NSCursor.arrow.set()
     }
 }
 
@@ -691,10 +695,11 @@ final class PointerButton: NSButton {
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         trackingAreas.filter { $0.owner === self && $0.options.contains(.cursorUpdate) }.forEach(removeTrackingArea)
-        addTrackingArea(NSTrackingArea(rect: bounds, options: [.cursorUpdate, .activeAlways, .inVisibleRect], owner: self))
+        addTrackingArea(NSTrackingArea(rect: bounds, options: pointerTrackingOptions, owner: self))
     }
 
-    override func cursorUpdate(with event: NSEvent) {
-        NSCursor.pointingHand.set()
-    }
+    override func cursorUpdate(with event: NSEvent) { NSCursor.pointingHand.set() }
+    override func mouseMoved(with event: NSEvent) { NSCursor.pointingHand.set() }
+    override func mouseEntered(with event: NSEvent) { NSCursor.pointingHand.set() }
+    override func mouseExited(with event: NSEvent) { NSCursor.arrow.set() }
 }
